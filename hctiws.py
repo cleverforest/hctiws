@@ -77,8 +77,11 @@ def get_text_size(text: str, font: str, size: list[int], offset=0,
         return (tmp_font, tmp_size1, False)
     # the last boolean value indicates that the text needs to be compressed
 
-def draw_text(s_img: Image.Image, text: str, font: str, color: str, pos: list[int], size: list[int],
-              h_align="left", v_align="top", offset=0) -> Image.Image:
+def draw_text(s_img: Image.Image,
+              text: str, font: str, color: str,
+              pos: list[int], size: list[int],
+              h_align="left", v_align="top",
+              offset=0) -> Tuple[Image.Image, list[int], list[int]]:
     """Drawing the text to the image"""
     new_img = s_img
     try:
@@ -120,8 +123,10 @@ def draw_text(s_img: Image.Image, text: str, font: str, color: str, pos: list[in
             tmp_pos[1] += (size[1] - text_size[1]) / 2
         elif v_align == "bottom":
             tmp_pos[1] += size[1] - text_size[1]
-        new_img.paste(tmp_canvas, (int(tmp_pos[0]),
-                                   int(tmp_pos[1])), tmp_canvas)
+        
+        actual_pos = (int(tmp_pos[0]), int(tmp_pos[1]))
+        new_img.paste(tmp_canvas, actual_pos, tmp_canvas)
+        return (new_img, actual_pos, text_size)
     else:
         text_size = [tmp_font.getsize(text)[0],
                     tmp_font.getsize(text)[1] * (1 - offset)]
@@ -145,7 +150,7 @@ def draw_text(s_img: Image.Image, text: str, font: str, color: str, pos: list[in
             color = default_color
         ImageDraw.Draw(new_img).text(tmp_pos, text, fill=color, font=tmp_font)
         #print (tmp_size," ",text_size," ", size[0],"*",size[1])
-    return new_img
+        return (new_img, tmp_pos, text_size)
 
 
 def generate_text(s_img: Image.Image,
@@ -155,7 +160,7 @@ def generate_text(s_img: Image.Image,
                   meta_conf: dict[str,]) -> Tuple[Image.Image, int]:
     """Generating image of 'text' type"""
     #print(index, ",", para_list["position"])
-    new_img = draw_text(s_img, item_list[index],
+    (new_img, _, _) = draw_text(s_img, item_list[index],
                         para_list["font"], para_list["color"], para_list["position"],
                         [para_list["width"], para_list["height"]],
                         para_list["horizontal_align"],
@@ -169,7 +174,7 @@ def generate_colortext(s_img: Image.Image,
                        para_list: dict[str,],
                        meta_conf: dict[str,]) -> Tuple[Image.Image, int]:
     """Generating image of 'colortext' type"""
-    new_img = draw_text(s_img, item_list[index + 1],
+    (new_img, _, _) = draw_text(s_img, item_list[index + 1],
                         para_list["font"], item_list[index], para_list["position"],
                         [para_list["width"], para_list["height"]],
                         para_list["horizontal_align"],
@@ -215,7 +220,7 @@ def generate_vertitext(s_img: Image.Image,
         cur_v_pos = 0
     cur_v_pos += para_list["position"][1]
     for i in range(text_len):
-        new_img = draw_text(s_img, text[i], para_list["font"], para_list["color"],
+        (new_img, _, _) = draw_text(s_img, text[i], para_list["font"], para_list["color"],
                             [para_list["position"][0], int(cur_v_pos)],
                             [para_list["width"], int(v_step[i])],
                             para_list["horizontal_align"], "center",
@@ -231,12 +236,12 @@ def generate_doubletext_nl(s_img: Image.Image,
                            meta_conf: dict[str,]) -> Tuple[Image.Image, int]:
     """Generating image of 'doubletext_nl' type"""
     single_height = int((para_list["height"] - para_list["space"])/2)
-    new_img = draw_text(s_img, item_list[index],
+    (new_img, _, _) = draw_text(s_img, item_list[index],
                         para_list["font"], para_list["color"], para_list["position"],
                         [para_list["width"],
                          single_height], para_list["horizontal_align"],
                         para_list["vertical_align"], para_list.get("offset", 0))
-    new_img = draw_text(s_img, item_list[index + 1],
+    (new_img, _, _) = draw_text(new_img, item_list[index + 1],
                         para_list["font"], para_list["color"],
                         [para_list["position"][0], para_list["position"]
                          [1] + single_height + para_list["space"]],
@@ -275,14 +280,14 @@ def generate_doubletext(s_img: Image.Image,
                          major_size - para_list["minimum_diff"])
     minor_font = major_font = ImageFont.truetype(para_list["font"], minor_size)
     minor_text_size = minor_font.getsize(item_list[index + 1])
-    new_img = draw_text(s_img, item_list[index],
+    (new_img, _, _) = draw_text(s_img, item_list[index],
                         para_list["font"], para_list["color"], para_list["position"],
                         [major_text_size[0], para_list["height"]], "left",
                         para_list["vertical_align"], para_list.get("offset", 0))
     minor_pos = para_list["position"].copy()
     minor_pos[0] += major_text_size[0] + para_list["space"]
     minor_textsize = [minor_text_size[0], para_list["height"]].copy()
-    new_img2 = draw_text(new_img, item_list[index + 1],
+    (new_img2, _, _) = draw_text(new_img, item_list[index + 1],
                          para_list["font"], para_list["color"], minor_pos,
                          minor_textsize, para_list["horizontal_align_right"],
                          para_list["vertical_align"], para_list.get("offset", 0))
@@ -336,6 +341,49 @@ def generate_figure(s_img: Image.Image,
 #    return [new_img, index+1]
 
 
+def generate_text_plus_fig(s_img: Image.Image,
+                  item_list: list[str],
+                  index: int,
+                  para_list: dict[str,],
+                  meta_conf: dict[str,]) -> Tuple[Image.Image, int]:
+    """Generating image of 'text_plus_fig' type"""
+    # This type will keep aspect ratio by default and this can't be changed
+    #print(index, ",", para_list["position"])
+
+    # calculate and resize the image
+    if len(item_list) <= index + 1 or item_list[index + 1] == "" or item_list[index + 1] == None:
+        (ret_img, ret_index) = generate_text(
+            s_img, item_list, index, para_list, meta_conf)
+        return (ret_img, ret_index + 1)
+    new_img = s_img
+    try:
+        imgfile = find_file(item_list[index + 1])
+    except NameError:
+        imgfile = meta_conf["figure_alias"][item_list[index + 1]]
+    fig: Image.Image = Image.open(imgfile)
+
+    fig.thumbnail((para_list["width"], para_list["height"]))
+    fig_pos = para_list["position"].copy()
+    fig_pos[0] += para_list["width"] - fig.size[0] # right
+    fig_pos[1] += int((para_list["height"] - fig.size[1]) / 2) # middle
+
+    # add the text
+    (new_img, new_pos, new_size) = draw_text(s_img, item_list[index],
+                        para_list["font"], para_list["color"],
+                        para_list["position"],
+                        [para_list["width"] - fig.size[0],
+                         para_list["height"]],
+                        para_list["horizontal_align"],
+                        para_list["vertical_align"], para_list.get("offset", 0))
+    
+    # paste the image
+    if (para_list["figure_follow"] == True):
+        fig_pos[0] = new_pos[0] + new_size[0]
+    new_img.paste(fig, fig_pos, fig.convert("RGBA"))
+
+    return (new_img, index + 2)
+
+
 def process_section(style: dict[str,],
                     layout_type: str,
                     item_list: list[str]) -> Image.Image:
@@ -346,8 +394,9 @@ def process_section(style: dict[str,],
         "vertitext": generate_vertitext,
         "doubletext_nl": generate_doubletext_nl,
         "doubletext": generate_doubletext,
-        "figure": generate_figure
+        "figure": generate_figure,
         #"figuregroup": generate_figuregroup
+        "text_plus_fig": generate_text_plus_fig
     }
     if layout_type.startswith('_'):
         raise NameError("Invalid type name")
@@ -462,7 +511,7 @@ def main(argv=None):
     # display the version info
     print("HCTIWS Creates the Image with Sheets")
     print("       (C) ZMSOFT 2018-2025")
-    print("version 2.80\n")
+    print("version 2.81-dev\n")
     # get input filename
     if len(argv) == 1:
         print("Usage: hctiws [INPUT_FILE [OUTPUT_DIRECTORY]]\n")
